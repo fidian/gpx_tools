@@ -1,4 +1,5 @@
 /* This file is part of the package gpx_tools
+ * - Main source file for gpxrewrite tool
  * 
  * gpx_tools is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -13,19 +14,13 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  */
-#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef EXPAT_XMLPARSE
-#include <xmlparse.h>
-#else
-#include <expat.h>
-#endif
 
-#define CHUNK_SIZE 1024
-#define SETTING_LINE_LEN 1024
-#define STRING_CHUNK_SIZE 256
+#include "ini_settings.h"
+#include "mem_str.h"
+#include "waypoint.h"
 
 /* Cache Types, literally from the GPX   Default Prefix
  * ----------------------------------------------------
@@ -54,164 +49,21 @@
  * Virtual
  */
    
-typedef struct settings
-{
-   char *key, *value;
-   struct settings *next;
-} SettingsStruct;
-
 typedef struct app_data 
 {
    FILE *fpout;
-   XML_Parser parser;
    int depth;
    SettingsStruct *settings;
-   int in_wpt_tag;
-   int in_log_tag;
-   int in_log_type_tag;
-   int wrote_log_type;
-   int copy_to_data;
-   
-   char *wpt_tag;  // The wpt open tag
-   char *wpt_data;  // The XML data, excluding the name, desc, sym
-   char **currentTarget;  // Where we are sticking text
-   
-   char *name;  // GC1234
-   char *desc;  // Super Fake Cache by Someone Cool, Traditional Cache (2/2.5)
-   char *urlname;  // Super Fake Cache
-   char *sym;  // Geocache // Geocache Found
-   char *type;  // Geocache|Traditional Cache
-   int available;  // 1 // 0
-   int archived;  // 1 // 0
-   char *placedBy;  // Someone Cool
-   char *owner;  // Someone Cool
-   char *type2;  // Traditional Cache
-   char *container;  // Small
-   char *difficulty;  // 2
-   char *terrain;  // 2.5
-   char *hints;  // Look under the log
-   char *logSummary;  //  First letters of the log types (FFDFWO)
-   int bugs;  // Number of bugs in the cache
 } AppData;
 
 
-void *getMemory(size)
-{
-   void *memptr;
-   
-   memptr = malloc(size);
-   if (! memptr) 
-     {
-	fprintf(stderr, "Unable to allocate memory!\n");
-	exit(20);
-     }
-   memset(memptr, 0, size);
-   
-   return memptr;
-}
-
-
-void freeMemory(void **memory) 
-{
-   if (*memory == NULL)
-     {
-	return;
-     }
-   
-   free(*memory);
-   *memory = NULL;
-}
-
-
-void AppendStringN(char **dest, const char *src, const int slen)
-{
-   char *newdest;
-   int dlen, newlen;
-   int old_blocks, new_blocks;
-
-   if (*dest == NULL)
-     {
-	dlen = 0;
-	old_blocks = 0;
-     }
-   else
-     {
-	dlen = strlen(*dest);
-	old_blocks = 1 + (dlen / STRING_CHUNK_SIZE);
-     }
-   
-   newlen = dlen + slen + 1;
-   new_blocks = 1 + (newlen / STRING_CHUNK_SIZE);
-   
-   if (new_blocks != old_blocks) 
-     {
-	newdest = getMemory(new_blocks * STRING_CHUNK_SIZE);
-	newdest[0] = '\0';
-	if (*dest != NULL) 
-	  {
-	     strcpy(newdest, *dest);
-	  }
-	freeMemory((void **) dest);
-
-	*dest = newdest;
-     }
-   
-   strncat(*dest, src, slen);
-}
-
-
-void AppendString(char **dest, const char *src)
-{
-   int slen;
-
-   slen = strlen(src);
-   AppendStringN(dest, src, slen);
-}
-
-
-void LowercaseString(char *s)
-{
-   while (*s != '\0')
-     {
-	*s = tolower((int) *s);
-	s ++;
-     }
-}
-
-
-char *GetSetting(AppData *ad, char *keyname)
-{
-   SettingsStruct *node;
-   char *keyname_lower = NULL;
-   
-   AppendString(&keyname_lower, keyname);
-   LowercaseString(keyname_lower);
-   
-   node = ad->settings;
-   
-   while (node != NULL)
-     {
-	if (strcmp(node->key, keyname_lower) == 0)
-	  {
-	     freeMemory((void **) &keyname_lower);
-	     return node->value;
-	  }
-	
-	node = node->next;
-     }
-   
-   freeMemory((void **) &keyname_lower);
-   
-   return (char *) NULL;
-}
-
-
-char *GetFormattedCacheType(AppData *ad)
+char *GetFormattedCacheType(Waypoint_Info *wpi)
 {
    char *formattedType = NULL;
    int i;
    
-   AppendString(&formattedType, ad->type2);
+   AppendStringN(&formattedType, &(wpi->WaypointXML[wpi->type2_off]),
+		 wpi->type2_len);
    i = 0;
    while (formattedType[i] != ' ' && formattedType[i] != '-' &&
 	  formattedType[i] != '\0')
@@ -235,69 +87,30 @@ char *GetFormattedCacheType(AppData *ad)
 }
 
 
-void AutoSizeString(char *s, int max)
+void ChangeToSingleNumber(char **dest, char *source, int slen)
 {
-   char *s2 = s;
-   int len = 0, i = 0, in_auto = 0;
+   int num = 0;
+   char c;
    
-   // Count the length of the string excluding the special markers
-   while (*s2 != '\0')
+   if (slen >= 1 && source[0] >= '0' && source[0] <= '9')
      {
-	if ((unsigned char) *s2 != 0xFF) 
+	num = *source - '0';
+	num *= 2;
+	num --;
+	
+	if (slen == 3 && source[1] == '.' && source[2] == '5') 
 	  {
-	     len ++;
-	  }
-	s2 ++;
-	i ++;
-     }
-   
-   // If there are no special characters, abort.
-   if (i == len) 
-     {
-	return;
-     }
-   
-   // Adjust lengths, keeping a minimum of one character
-   while (i && len > max)
-     {
-	i --;
-	if (in_auto)
-	  {
-	     if ((unsigned char) s[i] == 0xFF)
-	       {
-		  in_auto = 0;
-	       }
-	     else if ((unsigned char) s[i - 1] != 0xFF)
-	       {
-		  s[i] = 0xFF;
-		  len --;
-	       }
-	  }
-	else
-	  {
-	     if ((unsigned char) s[i] == 0xFF)
-	       {
-		  in_auto = 1;
-	       }
+	     num ++;
 	  }
      }
    
-   // Remove special markers
-   s2 = s;
-   while (*s2 != '\0')
-     {
-	if ((unsigned char ) *s2 != 0xFF)
-	  {
-	     *s = *s2;
-	     s ++;
-	  }
-	s2 ++;
-     }
-   *s = *s2;
+   c = '0' + num;
+   AppendStringN(dest, &c, 1);
 }
 
-
-char *AssembleFormat(AppData *ad, char *Format, char *NameType)
+	
+char *AssembleFormat(Waypoint_Info *wpi, AppData *ad, 
+		     char *Format, char *NameType)
 {
    // Format is "Percent Code [Length]" where Length is optional
    // and can be 0 (auto-fit), or a number (up to that number)
@@ -331,18 +144,18 @@ char *AssembleFormat(AppData *ad, char *Format, char *NameType)
    // 
    // Anything else is copied verbatim
    
-   int length, i, j, k, max_length;
+   int length, i, j, k, max_length, should_escape;
    char *out = NULL, *lastEnd, *current, *tmp = NULL, *tmp2 = NULL;
    char c, *allowed;
 
    AppendString(&tmp, NameType);
    AppendString(&tmp, "_Allowed_Chars");
-   allowed = GetSetting(ad, tmp);
+   allowed = GetSetting(ad->settings, tmp);
    freeMemory((void **) &tmp);
    
    AppendString(&tmp, NameType);
    AppendString(&tmp, "_Max_Length");
-   tmp2 = GetSetting(ad, tmp);
+   tmp2 = GetSetting(ad->settings, tmp);
    freeMemory((void **) &tmp);
    max_length = 0;
    if (tmp2 != NULL && tmp2[0] >= '0' && tmp2[0] <= '9')
@@ -359,6 +172,7 @@ char *AssembleFormat(AppData *ad, char *Format, char *NameType)
    
    lastEnd = Format;
    current = Format;
+   should_escape = 1;
    while (*current != '\0')
      {
 	if (*current != '%')
@@ -379,115 +193,130 @@ char *AssembleFormat(AppData *ad, char *Format, char *NameType)
 	     switch (*current)
 	       {
 		case 'a': // Active
-		  if (ad->available) 
+		  if (wpi->available) 
 		    {
-		       AppendString(&tmp, GetSetting(ad, "Active_Yes"));
+		       AppendString(&tmp, GetSetting(ad->settings, "Active_Yes"));
 		    }
 		  else
 		    {
-		       AppendString(&tmp, GetSetting(ad, "Active_No"));
+		       AppendString(&tmp, GetSetting(ad->settings, "Active_No"));
 		    }
 		  break;
 		  
 		case 'b': // Bugs
-		  if (ad->bugs)
+		  if (wpi->bugs)
 		    {
-		       AppendString(&tmp, GetSetting(ad, "Bug_Yes"));
+		       AppendString(&tmp, GetSetting(ad->settings, "Bug_Yes"));
 		    }
 		  else
 		    {
-		       AppendString(&tmp, GetSetting(ad, "Bug_No"));
+		       AppendString(&tmp, GetSetting(ad->settings, "Bug_No"));
 		    }
 		  break;
 		  
 		case 'C': // Code, as specified with "CACHETYPE_Prefix"
 		case 'y': // Added to be consistent
-		  tmp2 = GetFormattedCacheType(ad);
+		  tmp2 = GetFormattedCacheType(wpi);
 		  AppendString(&tmp2, "_Prefix");
-		  AppendString(&tmp, GetSetting(ad, tmp2));
+		  AppendString(&tmp, GetSetting(ad->settings, tmp2));
 		  freeMemory((void **) &tmp2);
 		  break;
 		  
 		case 'D': // Difficulty, full string
-		  AppendString(&tmp, ad->difficulty);
+		  AppendStringN(&tmp, 
+				&(wpi->WaypointXML[wpi->difficulty_off]),
+				wpi->difficulty_len);
 		  break;
 		  
 		case 'd': // Difficulty, as single digit
-		  c = ad->difficulty[0] - '0';
-		  c *= 2;
-		  c --;
-		  if (ad->difficulty[1] == '.' && ad->difficulty[2] == '5')
-		    {
-		       c ++;
-		    }
-		  c += '0';
-		  AppendStringN(&tmp, &c, 1);
+		  ChangeToSingleNumber(&tmp, &(wpi->WaypointXML[wpi->difficulty_off]),
+				       wpi->difficulty_len);
 		  break;
 		  
 		case 'f': // Found it
-		  if (ad->available) 
+		  if (wpi->available) 
 		    {
-		       AppendString(&tmp, GetSetting(ad, "Found_Yes"));
+		       AppendString(&tmp, GetSetting(ad->settings, "Found_Yes"));
 		    }
 		  else
 		    {
-		       AppendString(&tmp, GetSetting(ad, "Found_No"));
+		       AppendString(&tmp, GetSetting(ad->settings, "Found_No"));
 		    }
 		  break;
 		  
 		case 'h': // Hint, full text
 		case 'H': // Added to be consistent
-		  AppendString(&tmp, ad->hints);
+		  AppendStringN(&tmp2, &(wpi->WaypointXML[wpi->hints_off]),
+				wpi->hints_len);
+		  HTMLUnescapeString(&tmp2);
+		  AppendString(&tmp, tmp2);
+		  freeMemory((void **) &tmp2);
 		  break;
 		  
 		case 'I': // ID (the xxxx part of GCxxxx)
-		  AppendString(&tmp, ad->name);
-		  tmp[0] = ' ';
-		  tmp[1] = ' ';
+		  AppendStringN(&tmp, &(wpi->WaypointXML[wpi->name_off]),
+				wpi->name_len);
+		  if (wpi->name_len > 2 && strncmp(tmp, "GC", 2) == 0)
+		    {
+		       tmp[0] = ' ';
+		       tmp[1] = ' ';
+		    }
 		  break;
 		  
 		case 'L': // First letter of the logs
-		  AppendString(&tmp, ad->logSummary);
+		  AppendString(&tmp, wpi->logSummary);
 		  break;
 		  
 	        case 'N': // Cache name (TODO: smart truncated)
-		  AppendString(&tmp, ad->urlname);
+		  AppendStringN(&tmp2, &(wpi->WaypointXML[wpi->urlname_off]),
+			       wpi->urlname_len);
+		  HTMLUnescapeString(&tmp2);
+		  AppendString(&tmp, tmp2);
+		  freeMemory((void **) &tmp2);
 		  break;
 		  
 		case 'O': // Owner, full name
-		  AppendString(&tmp, ad->owner);
+		  AppendStringN(&tmp2, &(wpi->WaypointXML[wpi->owner_off]),
+			       wpi->owner_len);
+		  HTMLUnescapeString(&tmp2);
+		  AppendString(&tmp, tmp2);
+		  freeMemory((void **) &tmp2);
 		  break;
 		  
 		case 'P': // Placed by, full name
-		  AppendString(&tmp, ad->placedBy);
+		  AppendStringN(&tmp2, &(wpi->WaypointXML[wpi->placedBy_off]),
+			       wpi->placedBy_len);
+		  HTMLUnescapeString(&tmp2);
+		  AppendString(&tmp, tmp2);
+		  freeMemory((void **) &tmp2);
 		  break;
 		  
 		case 'S': // Size, full string
-		  AppendString(&tmp, ad->container);
+		  AppendStringN(&tmp, &(wpi->WaypointXML[wpi->container_off]),
+			       wpi->container_len);
 		  break;
 		  
 		case 's': // Size, first letter
-		  AppendStringN(&tmp, ad->container, 1);
+		  if (wpi->container_len)
+		    {
+		       AppendStringN(&tmp, &(wpi->WaypointXML[wpi->container_off]),
+				     1);
+		    }
 		  break;
 
 		case 'T': // Terrain, full string
-		  AppendString(&tmp, ad->terrain);
+		  AppendStringN(&tmp, &(wpi->WaypointXML[wpi->terrain_off]),
+				wpi->terrain_len);
 		  break;
 		  
 		case 't': // Terrain, as single digit
-		  c = ad->terrain[0] - '0';
-		  c *= 2;
-		  c --;
-		  if (ad->terrain[1] == '.' && ad->terrain[2] == '5')
-		    {
-		       c ++;
-		    }
-		  c += '0';
-		  AppendStringN(&tmp, &c, 1);
+		  ChangeToSingleNumber(&tmp, &(wpi->WaypointXML[wpi->terrain_off]),
+				       wpi->terrain_len);
 		  break;
 		  
 		case 'Y': // Cache type, full name
-		  AppendString(&tmp, ad->type2);
+		  AppendStringN(&tmp, &(wpi->WaypointXML[wpi->type2_off]),
+				wpi->type2_len);
 		  break;
 		  
 		case '%': // Literals
@@ -540,13 +369,16 @@ char *AssembleFormat(AppData *ad, char *Format, char *NameType)
 		    }
 		  else if (allowed[0] != '\0')
 		    {
-		       for (k = 0; k > 0 && allowed[k] != '\0'; k ++)
+		       for (k = 0; k >= 0 && allowed[k] != '\0'; k ++)
 			 {
 			    if (allowed[k] == c)
 			      {
 				 // A letter specified in the ini file
 				 tmp[j] = c;
 				 j ++;
+				 // k gets incremented at the end of the
+				 // loop, so -1 won't work here
+				 k = -2;
 			      }
 			 }
 		    }
@@ -565,7 +397,7 @@ char *AssembleFormat(AppData *ad, char *Format, char *NameType)
 
 	     // Handle length specifiers (numbers after the code) if
 	     // length == -1
-	     if (length == -1 && *current >= '0' && *current <= '0')
+	     if (length == -1 && *current >= '0' && *current <= '9')
 	       {
 		  // Find and parse a number after the format code
 		  length = 0;
@@ -582,8 +414,6 @@ char *AssembleFormat(AppData *ad, char *Format, char *NameType)
 		  if (strlen(tmp) > length)
 		    tmp[length] = '\0';
 	       }
-	     
-	     //fprintf(ad->fpout, "Processed:  %s\n", tmp);
 	     
 	     if (length == 0)
 	       {
@@ -620,25 +450,28 @@ char *AssembleFormat(AppData *ad, char *Format, char *NameType)
 	     out[max_length] = '\0';
 	  }
      }
-   else
-     {
-	// Remove the special markers
-	AutoSizeString(out, strlen(out));
-     }
-   
 
    return out;
 }
 
 
-void WriteSymTag(AppData *ad)
+// Static char or NULL if no change.
+// Needs to be HTML escaped.
+char *BuildSymTag(Waypoint_Info *wpi, AppData *ad)
 {
    char *formattedType = NULL;
    char *keyName = NULL, *value = NULL, *foundStatus = NULL;
    
-   formattedType = GetFormattedCacheType(ad);
+   if (wpi->sym_len == 0)
+     {
+	return (char *) NULL;
+     }
    
-   if (strcmp(ad->sym, "Geocache Found") == 0)
+   formattedType = GetFormattedCacheType(wpi);
+   
+   if (wpi->sym_len == 14 &&
+       strncmp(&(wpi->WaypointXML[wpi->sym_off]), "Geocache Found",
+	       wpi->sym_len) == 0)
      {
 	AppendString(&foundStatus, "Found");
      }
@@ -646,14 +479,15 @@ void WriteSymTag(AppData *ad)
      {
 	AppendString(&foundStatus, "Not_Found");
      }
-   
+
    // TYPE_SIZE_FOUND
    AppendString(&keyName, formattedType);
    AppendString(&keyName, "_");
-   AppendString(&keyName, ad->container);
+   AppendStringN(&keyName, &(wpi->WaypointXML[wpi->container_off]),
+		 wpi->container_len);
    AppendString(&keyName, "_");
    AppendString(&keyName, foundStatus);
-   value = GetSetting(ad, keyName);
+   value = GetSetting(ad->settings, keyName);
    freeMemory((void **) &keyName);
    
    // TYPE_FOUND
@@ -662,7 +496,7 @@ void WriteSymTag(AppData *ad)
 	AppendString(&keyName, formattedType);
 	AppendString(&keyName, "_");
 	AppendString(&keyName, foundStatus);
-	value = GetSetting(ad, keyName);
+	value = GetSetting(ad->settings, keyName);
 	freeMemory((void **) &keyName);
      }
    
@@ -670,461 +504,107 @@ void WriteSymTag(AppData *ad)
    if (value == NULL) 
      {
 	AppendString(&keyName, foundStatus);
-	value = GetSetting(ad, keyName);
+	value = GetSetting(ad->settings, keyName);
 	freeMemory((void **) &keyName);
      }
    
-   if (value == NULL)
-     {
-	value = ad->sym;
-     }
-   
-   fprintf(ad->fpout, "\n    <sym>%s</sym>", value);
-   
    freeMemory((void **) &formattedType);
    freeMemory((void **) &foundStatus);
+
+   return value;
 }
 
 
-void WriteFormattedTags(AppData *ad)
+void WriteFormattedTags(Waypoint_Info *wpi, AppData *ad)
 {
    char *format, *output = NULL;
    
-//   fprintf(ad->fpout, "Name: %s\nDesc: %s\nUrlname: %s\nSym: %s\n",
-//	   ad->name, ad->desc, ad->urlname, ad->sym);
-//   fprintf(ad->fpout, "Type: %s\nAvailable: %d\nArchived: %d\n",
-//	   ad->type, ad->available, ad->archived);
-//   fprintf(ad->fpout, "Placed By: %s\nOwner: %s\nType 2: %s\n",
-//	   ad->placedBy, ad->owner, ad->type2);
-//   fprintf(ad->fpout, "Container: %s\nDifficulty: %s\nTerrain: %s\n",
-//	   ad->container, ad->difficulty, ad->terrain);
-//   fprintf(ad->fpout, "Hints: %s\nLogs: %s\nBugs: %d\n",
-//	   ad->hints, ad->logSummary, ad->bugs);
-
-   format = GetSetting(ad, "Waypoint_Format");
+   format = GetSetting(ad->settings, "Waypoint_Format");
    if (format != NULL)
      {
-	output = AssembleFormat(ad, format, "Waypoint");
+	output = AssembleFormat(wpi, ad, format, "Waypoint");
      }
    else
      {
-	AppendString(&output, ad->name);
+	AppendStringN(&output, &(wpi->WaypointXML[wpi->name_off]),
+		      wpi->name_len);
      }
    
-   fprintf(ad->fpout, "\n    <name>%s</name>", output);
+   HTMLEscapeString(&output);
+   SwapWaypointString(wpi, wpi->name_off, wpi->name_len, output);
    freeMemory((void **) &output);
    
-   format = GetSetting(ad, "Desc_Format");
+   format = GetSetting(ad->settings, "Desc_Format");
    if (format != NULL)
      {
-	output = AssembleFormat(ad, format, "Desc");
+	output = AssembleFormat(wpi, ad, format, "Desc");
      }
    else
      {
-	AppendString(&output, ad->desc);
+	AppendStringN(&output, &(wpi->WaypointXML[wpi->gcname_off]),
+		      wpi->gcname_len);
      }
    
-   fprintf(ad->fpout, "\n    <desc>%s</desc>", output);
+   HTMLEscapeString(&output);
+   SwapWaypointString(wpi, wpi->gcname_off, wpi->gcname_len, output);
    freeMemory((void **) &output);
    
-   WriteSymTag(ad);
+   output = BuildSymTag(wpi, ad);
+   SwapWaypointString(wpi, wpi->sym_off, wpi->sym_len, output);
+   // Don't free this one
 }
 
 
-void ClearAppData(AppData *ad, int full)
+void WriteDefaultSettings(SettingsStruct **head)
 {
-   SettingsStruct *ptr, *nxt;
-
-   freeMemory((void **) &(ad->wpt_tag));
-   freeMemory((void **) &(ad->wpt_data));
-   freeMemory((void **) &(ad->name));
-   freeMemory((void **) &(ad->desc));
-   freeMemory((void **) &(ad->urlname));
-   freeMemory((void **) &(ad->sym));
-   freeMemory((void **) &(ad->type));
-   ad->available = 0;
-   ad->archived = 0;
-   freeMemory((void **) &(ad->placedBy));
-   freeMemory((void **) &(ad->owner));
-   freeMemory((void **) &(ad->type2));
-   freeMemory((void **) &(ad->container));
-   freeMemory((void **) &(ad->difficulty));
-   freeMemory((void **) &(ad->terrain));
-   freeMemory((void **) &(ad->hints));
-   freeMemory((void **) &(ad->logSummary));
-   ad->bugs = 0;
+   WriteSetting(head, "Benchmark_Prefix", "X");
+   WriteSetting(head, "CITO_Event_Prefix", "C");
+   WriteSetting(head, "Earthcache_Prefix", "G");
+   WriteSetting(head, "Event_Prefix", "E");
+   WriteSetting(head, "Letterbox_Hybrid_Prefix", "B");
+   WriteSetting(head, "Locationless_Prefix", "L");
+   WriteSetting(head, "Mega_Prefix", "E");
+   WriteSetting(head, "Multi_Prefix", "M");
+   WriteSetting(head, "Project_APE_Prefix", "A");
+   WriteSetting(head, "Traditional_Prefix", "T");
+   WriteSetting(head, "Unknown_Prefix", "U");
+   WriteSetting(head, "Virtual_Prefix", "V");
+   WriteSetting(head, "Webcam_Prefix", "W");
    
-   if (full)
-     {
-	ptr = ad->settings;
-	while (ptr != NULL) 
-	  {
-	     nxt = ptr->next;
-	     freeMemory((void **) &(ptr->key));
-	     freeMemory((void **) &(ptr->value));
-	     freeMemory((void **) &ptr);
-	     ptr = nxt;
-	  }
-	ad->settings = NULL;
-     }
+   WriteSetting(head, "Active_Yes", "Y");
+   WriteSetting(head, "Active_No", "N");
+   WriteSetting(head, "Bug_Yes", "Y");
+   WriteSetting(head, "Bug_No", "N");
+   WriteSetting(head, "Found_Yes", "Y");
+   WriteSetting(head, "Found_No", "N");
 }
 
 
-void WriteSetting(AppData *ad, const char *key, const char *value)
+void WaypointHandler(Waypoint_Info *wpi, void *extra_data)
 {
-   SettingsStruct *ss;
+   AppData *ad = (AppData *) extra_data;
    
-   ss = getMemory(sizeof(SettingsStruct));
-   AppendString(&(ss->key), key);
-   LowercaseString(ss->key);
-   AppendString(&(ss->value), value);
-   ss->next = ad->settings;
-   ad->settings = ss;
+   WriteFormattedTags(wpi, ad);
+
+   fputs(wpi->WaypointXML, ad->fpout);
 }
 
 
-void WriteDefaultSettings(AppData *ad)
+void NonWaypointHandler(const char *txt, int len, void *extra_data)
 {
-   WriteSetting(ad, "Benchmark_Prefix", "X");
-   WriteSetting(ad, "CITO_Event_Prefix", "C");
-   WriteSetting(ad, "Earthcache_Prefix", "G");
-   WriteSetting(ad, "Event_Prefix", "E");
-   WriteSetting(ad, "Letterbox_Hybrid_Prefix", "B");
-   WriteSetting(ad, "Locationless_Prefix", "L");
-   WriteSetting(ad, "Mega_Prefix", "E");
-   WriteSetting(ad, "Multi_Prefix", "M");
-   WriteSetting(ad, "Project_APE_Prefix", "A");
-   WriteSetting(ad, "Traditional_Prefix", "T");
-   WriteSetting(ad, "Unknown_Prefix", "U");
-   WriteSetting(ad, "Virtual_Prefix", "V");
-   WriteSetting(ad, "Webcam_Prefix", "W");
+   char *out = NULL;
+   AppData *ad = (AppData *) extra_data;
    
-   WriteSetting(ad, "Active_Yes", "Y");
-   WriteSetting(ad, "Active_No", "N");
-   WriteSetting(ad, "Bug_Yes", "Y");
-   WriteSetting(ad, "Bug_No", "N");
-   WriteSetting(ad, "Found_Yes", "Y");
-   WriteSetting(ad, "Found_No", "N");
-}
-
-
-void ReadSettings(AppData *ad, const char *filename)
-{
-   FILE *fp;
-   char *buffer, *key_start, *value_start, *tmp_ptr;
-   
-   fp = fopen(filename, "r");
-   if (! fp)
-     {
-	fprintf(stderr, "Error opening settings file: %s\n", filename);
-	exit(10);
-     }
-   
-   buffer = getMemory(SETTING_LINE_LEN);
-   while (! feof(fp))
-     {
-	fgets(buffer, SETTING_LINE_LEN, fp);
-	//printf("buff: %s", buffer);
-
-	// Trim the end of the string
-	tmp_ptr = buffer + strlen(buffer) - 1;
-	while (*tmp_ptr == '\n' || *tmp_ptr == '\r' ||
-	       *tmp_ptr == '\t' || *tmp_ptr == ' ')
-	  {
-	     *tmp_ptr = '\0';
-	     tmp_ptr --;
-	  }
-	
-	// Trim the beginning
-	key_start = buffer;
-	while (*key_start == ' ' || *key_start == '\t')
-	  {
-	     key_start ++;
-	  }
-	
-	// Find the value beginning and trim end of the key and
-	// the beginning of the value
-	value_start = key_start + 1;
-	while (*value_start != '=' && *value_start != '\0')
-	  {
-	     value_start ++;
-	  }
-	if (*value_start != '\0')
-	  {
-	     *value_start = ' ';
-	     value_start --;
-	     while (*value_start == '\t' || *value_start == ' ')
-	       {
-		  value_start --;
-	       }
-	     value_start ++;
-	     while (*value_start == '\t' || *value_start == ' ')
-	       {
-		  *value_start = '\0';
-		  value_start ++;
-	       }
-	     //printf("key: %s\n", key_start);
-	     
-	     // If we have something, save it.
-	     if (*value_start != '\0')
-	       {
-		  //printf("[%s] = [%s]\n", key_start, value_start);
-		  WriteSetting(ad, key_start, value_start);
-	       }
-	  }
-     }
-   
-   freeMemory((void **) &buffer);
-   fclose(fp);
-}
-
-
-void start_hndl(void *data, const char *el, const char **attr)
-{
-   AppData *ad = (AppData *) data;
-   int i;
-   char *out;
-   
-//   for (i = 0; i < ad->depth; i ++) 
-//     {
-//	printf("  ");
-//     }
-//
-//   printf("%s ", el);
-//   for (i = 0; attr[i]; i += 2) 
-//     {
-//	printf("(%s = %s)", attr[i], attr[i + 1]);
-//     }
-//   
-//   printf("\n");
-
-   if (strcmp(el, "wpt") == 0) 
-     {
-	ad->in_wpt_tag ++;
-     }
-   if (strcmp(el, "groundspeak:log") == 0)
-     {
-	ad->in_log_tag ++;
-     }
-   if (ad->in_log_tag && strcmp(el, "groundspeak:type") == 0)
-     {
-	ad->in_log_type_tag ++;
-     }
-   
-   ad->currentTarget = NULL;
-   ad->copy_to_data = 1;
-   
-   out = NULL;
-   AppendString(&out, "<");
-   AppendString(&out, (const char *) el);
-   for (i = 0; attr[i]; i += 2)
-     {
-	AppendString(&out, " ");
-	AppendString(&out, (const char *) attr[i]);
-	AppendString(&out, "=\"");
-	AppendString(&out, (const char *) attr[i + 1]);
-	AppendString(&out, "\"");
-     }
-   AppendString(&out, ">");
-   if (ad->in_wpt_tag == 0)
-     {
-	fprintf(ad->fpout, out);
-     }
-   else if (ad->in_wpt_tag == 1)
-     {
-	if (strcmp(el, "wpt") == 0) 
-	  {
-	     AppendString(&(ad->wpt_tag), out);
-	  }
-	else if (strcmp(el, "name") == 0 && ad->name == NULL)
-	  {
-	     ad->currentTarget = &(ad->name);
-	     ad->copy_to_data = 0;
-	  }
-	else if (strcmp(el, "desc") == 0 && ad->desc == NULL)
-	  {
-	     ad->currentTarget = &(ad->desc);
-	     ad->copy_to_data = 0;
-	  }
-	else if (strcmp(el, "urlname") == 0 && ad->urlname == NULL)
-	  {
-	     ad->currentTarget = &(ad->urlname);
-	  }
-	else if (strcmp(el, "sym") == 0 && ad->sym == NULL)
-	  {
-	     ad->currentTarget = &(ad->sym);
-	     ad->copy_to_data = 0;
-	  }
-	else if (strcmp(el, "type") == 0 && ad->type == NULL)
-	  {
-	     ad->currentTarget = &(ad->type);
-	  }
-	else if (strcmp(el, "groundspeak:cache") == 0)
-	  {
-	     for (i = 0; attr[i]; i += 2)
-	       {
-		  if (strcmp(attr[i], "available") == 0)
-		    {
-		       if (attr[i + 1][0] == 'T' || attr[i + 1][0] == 't')
-			 {
-			    ad->available = 1;
-			 }
-		    }
-		  else if (strcmp(attr[i], "archived") == 0)
-		    {
-		       if (attr[i + 1][0] == 'T' || attr[i + 1][0] == 't')
-			 {
-			    ad->archived = 1;
-			 }
-		    }
-	       }
-	  }
-	else if (strcmp(el, "groundspeak:placed_by") == 0 && 
-		 ad->placedBy == NULL)
-	  {
-	     ad->currentTarget = &(ad->placedBy);
-	  }
-	else if (strcmp(el, "groundspeak:owner") == 0 && ad->owner == NULL)
-	  {
-	     ad->currentTarget = &(ad->owner);
-	  }
-	else if (strcmp(el, "groundspeak:type") == 0 && ad->type2 == NULL)
-	  {
-	     ad->currentTarget = &(ad->type2);
-	  }
-	else if (strcmp(el, "groundspeak:container") == 0 &&
-		 ad->container == NULL)
-	  {
-	     ad->currentTarget = &(ad->container);
-	  }
-	else if (strcmp(el, "groundspeak:difficulty") == 0 &&
-		 ad->difficulty == NULL)
-	  {
-	     ad->currentTarget = &(ad->difficulty);
-	  }
-	else if (strcmp(el, "groundspeak:terrain") == 0 &&
-		 ad->terrain == NULL)
-	  {
-	     ad->currentTarget = &(ad->terrain);
-	  }
-	else if (strcmp(el, "groundspeak:encoded_hints") == 0 &&
-		 ad->hints == NULL)
-	  {
-	     ad->currentTarget = &(ad->hints);
-	  }
-	else if (strcmp(el, "groundspeak:type") == 0 &&
-		 ad->in_log_type_tag == 1)
-	  {
-	     ad->currentTarget = &(ad->logSummary);
-	     ad->copy_to_data = 0;
-	  }
-	else if (strcmp(el, "groundspeak:travelbug") == 0)
-	  {
-	     ad->bugs ++;
-	  }
-	
-	if (ad->copy_to_data && strcmp(el, "wpt") != 0)
-	  {
-	     AppendString(&(ad->wpt_data), out);
-	  }
-     }
-
+   AppendStringN(&out, txt, len);
+   fputs(out, ad->fpout);
    freeMemory((void **) &out);
-   
-   ad->depth ++;
-}
-
-
-void end_hndl(void *data, const char *el) 
-{
-   AppData *ad = (AppData *) data;
-   
-   if (ad->in_wpt_tag == 0)
-     {
-	fprintf(ad->fpout, "</%s>", el);
-     }
-   else if (ad->copy_to_data)
-     {
-	AppendString(&(ad->wpt_data), "</");
-	AppendString(&(ad->wpt_data), el);
-	AppendString(&(ad->wpt_data), ">");
-     }
-   
-   if (strcmp(el, "wpt") == 0)
-     {
-	ad->in_wpt_tag --;
-	if (ad->in_wpt_tag == 0)
-	  {
-	     fwrite(ad->wpt_tag, 1, strlen(ad->wpt_tag), ad->fpout);
-	     WriteFormattedTags(ad);
-	     fwrite(ad->wpt_data, 1, strlen(ad->wpt_data), ad->fpout);
-	  }
-	ClearAppData(ad, 0);
-     }
-   if (strcmp(el, "groundspeak:log") == 0)
-     {
-	ad->in_log_tag --;
-     }
-   if (ad->in_log_tag && strcmp(el, "groundspeak:type") == 0)
-     {
-	ad->in_log_type_tag --;
-	if (ad->in_log_type_tag == 0)
-	  {
-	     ad->wrote_log_type = 0;
-	  }
-     }
-   
-   ad->currentTarget = NULL;
-   ad->depth --;
-}
-
-
-void char_hndl(void *data, const char *txt, int txtlen)
-{
-   AppData *ad = (AppData *) data;
-   int i, handled = 0;
-   
-   if (ad->in_wpt_tag == 0)
-     {
-	fwrite(txt, 1, txtlen, ad->fpout);
-	return;
-     }
-   
-   if (ad->in_log_type_tag && ad->wrote_log_type == 0)
-     {
-	for (i = 0; i < txtlen && ad->wrote_log_type == 0; i ++)
-	  {
-	     if (txt[i] != '\0' && txt[i] != ' ' && txt[i] != '\t' &&
-		 txt[i] != '\r' && txt[i] != '\n')
-	       {
-		  AppendStringN(&(ad->logSummary), &(txt[i]), 1);
-		  ad->wrote_log_type = 1;
-	       }
-	  }
-	handled = 1;
-     }
-   
-   if (ad->copy_to_data)
-     {
-	// Send to waypoint buffer
-	AppendStringN(&(ad->wpt_data), txt, txtlen);
-     }
-   
-   if (ad->currentTarget != NULL && ! handled)
-     {
-	// Also maybe send to the AppData struct
-	// currentTarget is already a char **
-	AppendStringN(ad->currentTarget, txt, txtlen);
-     }
 }
 
 
 int main(int argc, char **argv)
 {
-   int len;
    FILE *fpin;
    AppData *ad;
-   char *buffer;
    
    if (argc < 2 || argc > 4)
      {
@@ -1136,19 +616,8 @@ int main(int argc, char **argv)
      }
    
    ad = getMemory(sizeof(AppData));
-   WriteDefaultSettings(ad);
-   ReadSettings(ad, argv[1]);
-   
-   ad->parser = XML_ParserCreate(NULL);
-   if (! ad->parser)
-     {
-	fprintf(stderr, "Could not allocate memory for parser\n");
-	exit(2);
-     }
-
-   XML_SetUserData(ad->parser, (void *) ad);
-   XML_SetElementHandler(ad->parser, start_hndl, end_hndl);
-   XML_SetCharacterDataHandler(ad->parser, char_hndl);
+   WriteDefaultSettings(&(ad->settings));
+   ReadSettings(&(ad->settings), argv[1]);
    
    if (argc >= 3)
      {
@@ -1178,33 +647,8 @@ int main(int argc, char **argv)
 	ad->fpout = stdout;
      }
    
-   fprintf(ad->fpout, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n");
-   
-   while (! feof(fpin)) 
-     {
-	buffer = XML_GetBuffer(ad->parser, CHUNK_SIZE);
-	
-	if (! buffer) 
-	  {
-	     fprintf(stderr, "Ran out of memory for parse buffer!\n");
-	     exit(4);
-	  }
-	
-	len = fread(buffer, 1, CHUNK_SIZE, fpin);
-	if (ferror(fpin)) 
-	  {
-	     fprintf(stderr, "Read error\n");
-	     exit(5);
-	  }
-	if (! XML_ParseBuffer(ad->parser, len, feof(fpin)))
-	  {
-	     fprintf(stderr, "Parse error at line %d:\n%s\n",
-		     XML_GetCurrentLineNumber(ad->parser),
-		     XML_ErrorString(XML_GetErrorCode(ad->parser)));
-	     exit(6);
-	  }
-     }
-   
+   fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n", ad->fpout);
+   ParseXML(fpin, &WaypointHandler, &NonWaypointHandler, (void *) ad);
    fprintf(ad->fpout, "\n");
    
    if (fpin != stdin)
@@ -1216,8 +660,8 @@ int main(int argc, char **argv)
      {
 	fclose(ad->fpout);
      }
-   
-   ClearAppData(ad, 1);
+
+   FreeSettings(&(ad->settings));
    freeMemory((void **) &ad);
 
    return 0;
