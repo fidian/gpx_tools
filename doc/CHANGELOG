@@ -1,3 +1,9 @@
+1.0: 2007-09-11
+ * Added gpxfilter to allow filtering based on difficulty, terrain, size,
+   and container type.
+ * Added gpxinfo to display information about a GPX file
+ * Switched to use autoconf and automake
+ 
 0.2: 2007-08-25
  * Split out code into separate files in preparation for cache filtering tool.
  * Corrected bug in %L format code.

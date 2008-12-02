@@ -1,0 +1,39 @@
+First off, the string should not use 0xFF as a delimiter.  Build a linked
+list backwards and try to make things fit.
+
+struct outNode {
+   char *string;
+   int type;  // 0 = static string, 1 = autofit, 2 = smart truncation
+}
+
+Mimic the smart truncation as per GPX Spinner (thanks Brian [GPX Spinner
+author] for the info).
+
+* Remove un-allowed words
+* Replace the string " and " with "&" or "+" depending on which one is
+  an allowed character.
+* Replace words with a short version:
+  one => 1
+  to => 2
+  two => 2
+  three => 3
+  for => 4
+  four => 4
+  five => 5
+  six => 6
+  seven => 7
+  eight => 8
+  ate => 8
+  nine => 9
+  zero => 0
+  ... continue up with numbers?
+* Remove unneeded words (and, the, a, an, of)
+* Remove remaining spaces
+* Remove non-alphanumeric
+* Remove vowels starting at the right
+* Truncate, but keep any numbers at the end
+
+Before starting and after each stage, condense multiple spaces into one.
+Stop truncation when it fits.
+
+Remember to leave at least 1 character from the shrinking / truncation.

@@ -1,0 +1,14 @@
+I'm still new to this autoconf stuff, so here's a few shortcuts I need to
+remember:
+
+
+What you need to compile:
+    ./configure && make
+    
+Prepare a package for distribution:
+    autoreconf && ./configure && make maintainer-clean && \
+    find . -name \*~ -exec rm \{\} \;
+
+Build Win32 binaries:
+    CC=i686-mingw32-gcc CFLAGS=-static \
+    ./configure --host=i686-pc-linux-gnu --target=i686-pc-mingw32

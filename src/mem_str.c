@@ -14,10 +14,19 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  */
+#include "../config.h"
 #include <ctype.h>
 #include <stdio.h>
+#ifdef HAVE_STDLIB_H
 #include <stdlib.h>
+#else
+#error NO STDLIB_H
+#endif
+#ifdef HAVE_STRING_H
 #include <string.h>
+#else
+#error NO STRING_H
+#endif
 
 #define STRING_CHUNK_SIZE 256
 
@@ -34,7 +43,11 @@ void *getMemory(int size)
 	fprintf(stderr, "Unable to allocate memory!\n");
 	exit(20);
      }
+#ifdef HAVE_MEMSET
    memset(memptr, 0, size);
+#else
+#error NO MEMSET
+#endif
    
    return memptr;
 }
@@ -87,7 +100,6 @@ void AppendStringN(char **dest, const char *src, const int slen)
    if (new_blocks != old_blocks) 
      {
 	// realloc doesn't seem work for me.  Inept programmer?
-	// newdest = realloc(newdest, new_blocks * STRING_CHUNK_SIZE);
 	newdest = getMemory(new_blocks * STRING_CHUNK_SIZE);
 	newdest[0] = '\0';
 	if (*dest != NULL) 
@@ -123,6 +135,17 @@ void LowercaseString(char *s)
    while (*s != '\0')
      {
 	*s = tolower((int) *s);
+	s ++;
+     }
+}
+
+
+// Changes a string into uppercase.  Don't pass NULL.
+void UppercaseString(char *s)
+{
+   while (*s != '\0')
+     {
+	*s = toupper((int) *s);
 	s ++;
      }
 }
@@ -274,4 +297,37 @@ void AutoSizeString(char *s, int max)
 	s2 ++;
      }
    *s = *s2;
+}
+
+
+// Quick number parsing routine
+float ParseNumber(char *s)
+{
+   float sign = 1;
+   float value = 0;
+   float factor = 0.1;
+   
+   if (*s == '-')
+     {
+	sign = -1;
+	s ++;
+     }
+   while (*s >= '0' && *s <= '9')
+     {
+	value *= 10;
+	value += *s - '0';
+	s ++;
+     }
+   if (*s == '.')
+     {
+	s ++;
+	while (*s >= '0' && *s <= '9')
+	  {
+	     value += factor * (*s - '0');
+	     factor /= 10;
+	     s ++;
+	  }
+     }
+   
+   return sign * value;
 }

@@ -1,0 +1,25 @@
+Cache Types, literally from the GPX   Default Prefix
+----------------------------------------------------
+Benchmark  -- Not used by GC.com      X
+Cache In Trash Out Event              C
+Earthcache                            G
+Event Cache                           E
+Letterbox Hybrid                      B
+Locationless (Reverse) Cache          L
+Mega-Event Cache                      E
+Multi-cache                           M
+Project APE Cache                     A
+Traditional Cache                     T
+Unknown Cache                         U
+Virtual Cache                         V
+Webcam Cache                          W
+
+Sizes, literally from the GPX
+-----------------------------
+Large
+Micro
+Other
+Regular
+Small
+Unknown
+Virtual

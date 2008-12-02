@@ -1,0 +1,38 @@
+Short name truncation, from Brian - GPX Spinner:
+------------------------------------------------
+
+> > Is there a way I can get the rules that you use to truncate cache 
+> > names?
+
+Sure. Here's the comments and some snippets of code to explain what I'm 
+doing.
+
+# remove un-allowed chars, but leave the space char so we can match ' and ' 
+and other whole words
+
+# get out of here if nothing to do
+return 'Geocache' if &is_blank($text);
+
+# first replace ' and ' with '&' or '+' depending on which char is allowed
+# replace other words with short version, e.g. for=>4, to=>2, zero=>0, 
+one=>1, etc.
+# remove unneeded words ('and', 'the', 'a', 'an', 'of')
+# remove remaining spaces
+# remove non-alphanumeric
+# remove vowels starting at right
+# lastly, truncate but keep any numbers at the end
+
+at each stage before "remove remaining spaces" I also condense any multi-
+spaces left after removing words.
+
+> > However, if you feel like this free program would be a competitor for
+> > your shareware, I would be understanding if you denied my request. 
+
+I only request that you don't advertise your program as a replacement or 
+competitor of Spinner. Let it stand on it's own.
+
+Good luck with your program!
+
+Brian
+
+

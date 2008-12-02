@@ -14,9 +14,18 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  */
+#include "config.h"
 #include <stdio.h>
+#ifdef HAVE_STDLIB_H
 #include <stdlib.h>
+#else
+#error NO STDLIB_H
+#endif
+#ifdef HAVE_STRING_H
 #include <string.h>
+#else
+#error NO STRING_H
+#endif
 
 #include "ini_settings.h"
 #include "mem_str.h"
@@ -54,6 +63,7 @@ void WriteSetting(SettingsStruct **head, const char *key, const char *value)
    SettingsStruct *ss;
    
    ss = getMemory(sizeof(SettingsStruct));
+   AppendString(&(ss->key_orig), key);
    AppendString(&(ss->key), key);
    LowercaseString(ss->key);
    AppendString(&(ss->value), value);
@@ -141,6 +151,7 @@ void FreeSettings(SettingsStruct **head)
 	cur = *head;
 	*head = cur->next;
 	freeMemory((void **) &(cur->key));
+	freeMemory((void **) &(cur->key_orig));
 	freeMemory((void **) &(cur->value));
 	freeMemory((void **) &cur);
      }

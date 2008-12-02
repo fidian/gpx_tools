@@ -14,9 +14,18 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  */
+#include "../config.h"
 #include <stdio.h>
+#ifdef HAVE_STDLIB_H
 #include <stdlib.h>
+#else
+#error NO STDLIB_H
+#endif
+#ifdef HAVE_STRING_H
 #include <string.h>
+#else
+#error NO STRING_H
+#endif
 #ifdef EXPAT_XMLPARSE
 #include <xmlparse.h>
 #else
@@ -48,7 +57,7 @@ void Waypoint_XML_Start(void *data, const char *el, const char **attr)
 	AppendString(&output, "\"");
      }
    AppendString(&output, ">");
-
+   
    if (wpp->wpi == (Waypoint_Info *) NULL)
      {
 	// We are not in a wpt tag
@@ -58,11 +67,26 @@ void Waypoint_XML_Start(void *data, const char *el, const char **attr)
 	     wpp->wpi = (Waypoint_Info *) getMemory(sizeof(Waypoint_Info));
 	     AppendString(&(wpp->wpi->WaypointXML), output);
 	     AppendString(&(wpp->wpi->TagStack), el);
+	     for (i = 0; attr[i]; i += 2)
+	       {
+		  if (strcmp(attr[i], "lat") == 0) 
+		    {
+		       wpp->wpi->lat = ParseNumber((char *) attr[i + 1]);
+		    }
+		  else if (strcmp(attr[i], "lon") == 0)
+		    {
+		       wpp->wpi->lon = ParseNumber((char *) attr[i + 1]);
+		    }
+	       }
 	     return;
 	  }
 	else
 	  {
-	     (*(wpp->NonWaypoint))(output, strlen(output), wpp->extra_data);
+	     if (wpp->NonWaypoint != NULL) 
+	       {
+		  (*(wpp->NonWaypoint))(output, strlen(output), wpp->extra_data);
+	       }
+	     
 	     freeMemory((void **) &output);
 	     return;
 	  }
@@ -113,6 +137,10 @@ void Waypoint_XML_Start(void *data, const char *el, const char **attr)
 		    {
 		       wpi->archived = 1;
 		    }
+	       }
+	     else if (strcmp(attr[i], "id") == 0)
+	       {
+		  wpi->id = (int) ParseNumber((char *) attr[i + 1]);
 	       }
 	  }
      }
@@ -179,7 +207,11 @@ void Waypoint_XML_End(void *data, const char *el)
    
    if (wpp->wpi == NULL)
      {
-	(*(wpp->NonWaypoint))(output, strlen(output), wpp->extra_data);
+	if (wpp->NonWaypoint != NULL)
+	  {
+	     (*(wpp->NonWaypoint))(output, strlen(output), wpp->extra_data);
+	  }
+	
 	freeMemory((void **) &output);
 	return;
      }
@@ -197,7 +229,11 @@ void Waypoint_XML_End(void *data, const char *el)
    if (i == 0)
      {
 	// Finished with wpt tag
-	(*(wpp->Waypoint))(wpp->wpi, wpp->extra_data);
+	if (wpp->Waypoint != NULL) 
+	  {
+	     (*(wpp->Waypoint))(wpp->wpi, wpp->extra_data);
+	  }
+	
 	freeMemory((void **) &(wpp->wpi->WaypointXML));
 	freeMemory((void **) &(wpp->wpi->logSummary));
 	freeMemory((void **) &(wpp->wpi->TagStack));
@@ -214,7 +250,11 @@ void Waypoint_XML_Char(void *data, const char *txt, int txtlen)
    
    if (! wpp->wpi) 
      {
-	(*(wpp->NonWaypoint))(txt, txtlen, wpp->extra_data);
+	if (wpp->NonWaypoint != NULL) 
+	  {
+	     (*(wpp->NonWaypoint))(txt, txtlen, wpp->extra_data);
+	  }
+	
 	return;
      }
 
@@ -284,8 +324,8 @@ void ParseXML(FILE *fp, WaypointFunc wp_func, NonWaypointFunc nonwp_func,
 	  }
 	if (! XML_ParseBuffer(wpp->parser, len, feof(fp)))
 	  {
-	     fprintf(stderr, "Parse error at line %d:\n%s\n",
-		     XML_GetCurrentLineNumber(wpp->parser),
+	     fprintf(stderr, "Parse error at line %ld:\n%s\n",
+		     (long) XML_GetCurrentLineNumber(wpp->parser),
 		     XML_ErrorString(XML_GetErrorCode(wpp->parser)));
 	     exit(6);
 	  }
@@ -365,4 +405,26 @@ void SwapWaypointString(Waypoint_Info *wpi, int offset, int len, char *str)
      {
 	wpi->hints_off += lendiff;
      }
+}
+
+
+// dest = dynamic string
+int ChangeToSingleNumber(char *source, int slen)
+{
+   int num = 0;
+   
+   if (slen >= 1 && source[0] >= '1' && source[0] <= '5')
+     {
+	num = *source - '0';
+	num *= 2;
+	num --;
+	
+	if (slen == 3 && source[5] != '5' && source[1] == '.' && 
+	    source[2] == '5') 
+	  {
+	     num ++;
+	  }
+     }
+   
+   return num;
 }

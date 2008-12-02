@@ -14,45 +14,28 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  */
+#include "../config.h"
 #include <stdio.h>
+#ifdef HAVE_STDLIB_H
 #include <stdlib.h>
+#else
+#error NO STDLIB_H
+#endif
+#ifdef HAVE_STRING_H
 #include <string.h>
+#else
+#error NO STRING_H
+#endif
 
+#include "config.h"
 #include "ini_settings.h"
 #include "mem_str.h"
 #include "waypoint.h"
 
-/* Cache Types, literally from the GPX   Default Prefix
- * ----------------------------------------------------
- * Benchmark  -- Not used by GC.com      X
- * Cache In Trash Out Event              C
- * Earthcache                            G
- * Event Cache                           E
- * Letterbox Hybrid                      B
- * Locationless (Reverse) Cache          L
- * Mega-Event Cache                      E
- * Multi-cache                           M
- * Project APE Cache                     A
- * Traditional Cache                     T
- * Unknown Cache                         U
- * Virtual Cache                         V
- * Webcam Cache                          W
- * 
- * Sizes, literally from the GPX
- * -----------------------------
- * Large
- * Micro
- * Other
- * Regular
- * Small
- * Unknown
- * Virtual
- */
-   
+
 typedef struct app_data 
 {
    FILE *fpout;
-   int depth;
    SettingsStruct *settings;
 } AppData;
 
@@ -87,28 +70,6 @@ char *GetFormattedCacheType(Waypoint_Info *wpi)
 }
 
 
-void ChangeToSingleNumber(char **dest, char *source, int slen)
-{
-   int num = 0;
-   char c;
-   
-   if (slen >= 1 && source[0] >= '0' && source[0] <= '9')
-     {
-	num = *source - '0';
-	num *= 2;
-	num --;
-	
-	if (slen == 3 && source[1] == '.' && source[2] == '5') 
-	  {
-	     num ++;
-	  }
-     }
-   
-   c = '0' + num;
-   AppendStringN(dest, &c, 1);
-}
-
-	
 char *AssembleFormat(Waypoint_Info *wpi, AppData *ad, 
 		     char *Format, char *NameType)
 {
@@ -229,8 +190,10 @@ char *AssembleFormat(Waypoint_Info *wpi, AppData *ad,
 		  break;
 		  
 		case 'd': // Difficulty, as single digit
-		  ChangeToSingleNumber(&tmp, &(wpi->WaypointXML[wpi->difficulty_off]),
-				       wpi->difficulty_len);
+		  i = ChangeToSingleNumber(&(wpi->WaypointXML[wpi->difficulty_off]),
+					   wpi->difficulty_len);
+		  c = i + '0';
+		  AppendStringN(&tmp, &c, 1);
 		  break;
 		  
 		case 'f': // Found it
@@ -267,7 +230,8 @@ char *AssembleFormat(Waypoint_Info *wpi, AppData *ad,
 		  AppendString(&tmp, wpi->logSummary);
 		  break;
 		  
-	        case 'N': // Cache name (TODO: smart truncated)
+	        case 'N': // Cache name
+		  // TODO: smart truncated - see doc/smart_truncation
 		  AppendStringN(&tmp2, &(wpi->WaypointXML[wpi->urlname_off]),
 			       wpi->urlname_len);
 		  HTMLUnescapeString(&tmp2);
@@ -310,8 +274,10 @@ char *AssembleFormat(Waypoint_Info *wpi, AppData *ad,
 		  break;
 		  
 		case 't': // Terrain, as single digit
-		  ChangeToSingleNumber(&tmp, &(wpi->WaypointXML[wpi->terrain_off]),
-				       wpi->terrain_len);
+		  i = ChangeToSingleNumber(&(wpi->WaypointXML[wpi->terrain_off]),
+					   wpi->terrain_len);
+		  c = i + '0';
+		  AppendStringN(&tmp, &c, 1);
 		  break;
 		  
 		case 'Y': // Cache type, full name
@@ -608,6 +574,7 @@ int main(int argc, char **argv)
    
    if (argc < 2 || argc > 4)
      {
+	fprintf(stderr, "gpxrewrite - Part of %s\n", PACKAGE_STRING);
 	fprintf(stderr, "Error:  Incorrect arguments\n");
 	fprintf(stderr, "    gpxrewrite settings.ini   (reads file from stdin, writes to stdout)\n");
 	fprintf(stderr, "    gpxrewrite settings.ini gpxfile.gpx   (writes to stdout)\n");

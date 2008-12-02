@@ -30,6 +30,9 @@ typedef struct waypointinfo
    int available, archived, bugs, in_log_type_tag;
    int *len_ptr;
    
+   float lat, lon;
+   int id;
+   
    int name_off, name_len;
    int gcname_off, gcname_len;
    int urlname_off, urlname_len;
@@ -60,3 +63,5 @@ void ParseXML(FILE *fp, WaypointFunc wp_func, NonWaypointFunc nonwp_func,
 	      void *extra_data);
 
 void SwapWaypointString(Waypoint_Info *wpi, int offset, int len, char *str);
+
+int ChangeToSingleNumber(char *source, int slen);

@@ -37,8 +37,11 @@ void AppendString(char **dest, const char *src);
 // Changes a string into lowercase.  Don't pass NULL.
 void LowercaseString(char *s);
 
+// Changes a string into uppercase.  Don't pass NULL.
+void UppercaseString(char *s);
+
 // String replace
-// Returns 0 on success, 1 on error (string not found)
+// Returns 0 on success, 1 if there was a problem (string not found)
 int StringReplace(char **where, const char *from, const char *to);
 
 // Takes the dynamic string s and converts the following characters:
@@ -60,3 +63,6 @@ void HTMLUnescapeString(char **s);
 // abc*DEFG*hijk*LMNO* -> abcDEhijkL
 // abc*DEFG*hijkl      -> abcDEFhijkl
 void AutoSizeString(char *s, int max);
+
+// Quick number parsing routine
+float ParseNumber(char *s);
