@@ -18,9 +18,6 @@ AC_PROG_INSTALL
 AC_PROG_MAKE_SET
 AC_EXEEXT
 
-# Not sure what this line does
-#AC_SUBST([AC_EXEEXT])
-
 AC_CHECK_FUNCS([memset])
 AC_CHECK_HEADERS([stdlib.h])
 AC_CHECK_HEADERS([string.h])

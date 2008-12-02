@@ -1,12 +1,20 @@
+1.1: Unreleased
+ * Moved several include lines to a standard include file
+ * Started work on including some debugging (will be added as needed)
+ * Added a No_Size and No_Type option for when it is not listed in the GPX
+   file, such as for the additional waypoint GPX file from geocaching.com
+ * Swaps out <desc> tag if the geocaching specific name does not exist, such
+   as for the additional waypoint GPX files from geocaching.com
+
 1.0: 2007-09-11
  * Added gpxfilter to allow filtering based on difficulty, terrain, size,
-   and container type.
+   and container type
  * Added gpxinfo to display information about a GPX file
  * Switched to use autoconf and automake
  
 0.2: 2007-08-25
- * Split out code into separate files in preparation for cache filtering tool.
- * Corrected bug in %L format code.
+ * Split out code into separate files in preparation for cache filtering tool
+ * Corrected bug in %L format code
  * Change the <groundspeak:name> tag instead of <desc>
  * Preserve formatting and essentially edit the tags inline
  * Corrected allowed characters code

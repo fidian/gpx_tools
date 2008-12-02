@@ -33,3 +33,6 @@ void ReadSettings(SettingsStruct **head, const char *filename);
 
 // Frees memory
 void FreeSettings(SettingsStruct **head);
+
+// Reads a line, newline independent
+void ReadLine(char *buffer, unsigned int len, FILE *fp);

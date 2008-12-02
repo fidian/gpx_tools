@@ -14,28 +14,17 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  */
-#include "../config.h"
-#include <stdio.h>
-#ifdef HAVE_STDLIB_H
-#include <stdlib.h>
-#else
-#error NO STDLIB_H
-#endif
-#ifdef HAVE_STRING_H
-#include <string.h>
-#else
-#error NO STRING_H
-#endif
-#ifdef EXPAT_XMLPARSE
-#include <xmlparse.h>
-#else
-#include <expat.h>
-#endif
-
+#define NEED_STDIO_H
+#define NEED_STDLIB_H
+#define NEED_STRING_H
+#define NEED_EXPAT_H
+#include "include.h"
 #include "mem_str.h"
 #include "waypoint.h"
 
-#define XML_CHUNK_SIZE 1024
+#define XML_CHUNK_SIZE 4096
+
+int XML_Newline_Type = 0;
 
 
 void Waypoint_XML_Start(void *data, const char *el, const char **attr)
@@ -46,6 +35,7 @@ void Waypoint_XML_Start(void *data, const char *el, const char **attr)
    char *output = NULL;
 
    // Reconstruct the tag
+   DEBUG("Waypoint XML Start (start)");
    AppendString(&output, "<");
    AppendString(&output, (const char *) el);
    for (i = 0; attr[i]; i += 2)
@@ -78,6 +68,7 @@ void Waypoint_XML_Start(void *data, const char *el, const char **attr)
 		       wpp->wpi->lon = ParseNumber((char *) attr[i + 1]);
 		    }
 	       }
+	     DEBUG("Waypoint XML Start (end)");
 	     return;
 	  }
 	else
@@ -88,6 +79,7 @@ void Waypoint_XML_Start(void *data, const char *el, const char **attr)
 	       }
 	     
 	     freeMemory((void **) &output);
+	     DEBUG("Waypoint XML Start (end)");
 	     return;
 	  }
      }
@@ -100,10 +92,16 @@ void Waypoint_XML_Start(void *data, const char *el, const char **attr)
    AppendString(&(wpi->TagStack), " ");
    AppendString(&(wpi->TagStack), el);
 
+   DEBUG(wpi->TagStack);
    if (strcmp(wpi->TagStack, "wpt name") == 0)
      {
 	wpi->name_off = strlen(wpi->WaypointXML);
 	wpi->len_ptr = &(wpi->name_len);
+     }
+   else if (strcmp(wpi->TagStack, "wpt desc") == 0)
+     {
+	wpi->desc_off = strlen(wpi->WaypointXML);
+	wpi->len_ptr = &(wpi->desc_len);
      }
    else if (strcmp(wpi->TagStack, "wpt urlname") == 0)
      {
@@ -192,6 +190,8 @@ void Waypoint_XML_Start(void *data, const char *el, const char **attr)
      {
 	wpi->bugs ++;
      }
+   
+   DEBUG("Waypoint XML Start (end)");
 }
 
 
@@ -200,7 +200,8 @@ void Waypoint_XML_End(void *data, const char *el)
    Waypoint_Parser *wpp = (Waypoint_Parser *) data;
    char *output = NULL;
    int i;
-   
+
+   DEBUG("Waypoint XML End (start)");
    AppendString(&output, "</");
    AppendString(&output, el);
    AppendString(&output, ">");
@@ -213,6 +214,7 @@ void Waypoint_XML_End(void *data, const char *el)
 	  }
 	
 	freeMemory((void **) &output);
+	DEBUG("Waypoint XML End (end)");
 	return;
      }
    
@@ -239,6 +241,7 @@ void Waypoint_XML_End(void *data, const char *el)
 	freeMemory((void **) &(wpp->wpi->TagStack));
 	freeMemory((void **) &(wpp->wpi));
      }
+   DEBUG("Waypoint XML End (end)");
 }
 
 
@@ -322,6 +325,24 @@ void ParseXML(FILE *fp, WaypointFunc wp_func, NonWaypointFunc nonwp_func,
 	     fprintf(stderr, "Read error\n");
 	     exit(5);
 	  }
+	
+	if (XML_Newline_Type == 0) 
+	  {
+	     // Try to auto-detect the newline type
+	     if (strstr(buffer, "\r\n")) 
+	       {
+		  XML_Newline_Type = 3;
+	       }
+	     else if (strstr(buffer, "\n"))
+	       {
+		  XML_Newline_Type = 2;
+	       }
+	     else if (strstr(buffer, "\r"))
+	       {
+		  XML_Newline_Type = 1;
+	       }
+	  }
+	
 	if (! XML_ParseBuffer(wpp->parser, len, feof(fp)))
 	  {
 	     fprintf(stderr, "Parse error at line %ld:\n%s\n",
@@ -360,6 +381,10 @@ void SwapWaypointString(Waypoint_Info *wpi, int offset, int len, char *str)
    if (wpi->name_off > offset)
      {
 	wpi->name_off += lendiff;
+     }
+   if (wpi->desc_off > offset)
+     {
+	wpi->desc_off += lendiff;
      }
    if (wpi->gcname_off > offset)
      {
@@ -427,4 +452,22 @@ int ChangeToSingleNumber(char *source, int slen)
      }
    
    return num;
+}
+
+
+// Returns the newline character as detected from the first line in the
+// XML file
+char *GetXMLNewline(void)
+{
+   if (XML_Newline_Type == 2)
+     {
+	return "\n";
+     }
+   
+   if (XML_Newline_Type == 1)
+     {
+	return "\r";
+     }
+   
+   return "\r\n";
 }

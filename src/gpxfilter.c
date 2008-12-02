@@ -14,20 +14,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  */
-#include "../config.h"
-#include <stdio.h>
-#ifdef HAVE_STDLIB_H
-#include <stdlib.h>
-#else
-#error NO STDLIB_H
-#endif
-#ifdef HAVE_STRING_H
-#include <string.h>
-#else
-#error NO STRING.H
-#endif
-
-#include "../config.h"
+#define NEED_STDIO_H
+#define NEED_STRING_H
+#include "include.h"
 #include "ini_settings.h"
 #include "mem_str.h"
 #include "waypoint.h"

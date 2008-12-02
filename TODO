@@ -1,38 +1,17 @@
-Short name truncation, from Brian - GPX Spinner:
-------------------------------------------------
+waypoint:  Parse waypoint date
+gpxfilter:  Filter by date
 
-> > Is there a way I can get the rules that you use to truncate cache 
-> > names?
+Reference points can start with TR, DB, or possibly others.  The %I format only
+removes the first two characters if they are "GC".  Make %i that will always
+remove the first two characters, and make new format codes for just the first
+two characters and just the first two if they are not GC.  It would be nice
+to have "GC1234" and "TB1234" show up as "1234" and "1234-TB" if possible
 
-Sure. Here's the comments and some snippets of code to explain what I'm 
-doing.
+Handle the following types and symbols (and others too):
 
-# remove un-allowed chars, but leave the space char so we can match ' and ' 
-and other whole words
-
-# get out of here if nothing to do
-return 'Geocache' if &is_blank($text);
-
-# first replace ' and ' with '&' or '+' depending on which char is allowed
-# replace other words with short version, e.g. for=>4, to=>2, zero=>0, 
-one=>1, etc.
-# remove unneeded words ('and', 'the', 'a', 'an', 'of')
-# remove remaining spaces
-# remove non-alphanumeric
-# remove vowels starting at right
-# lastly, truncate but keep any numbers at the end
-
-at each stage before "remove remaining spaces" I also condense any multi-
-spaces left after removing words.
-
-> > However, if you feel like this free program would be a competitor for
-> > your shareware, I would be understanding if you denied my request. 
-
-I only request that you don't advertise your program as a replacement or 
-competitor of Spinner. Let it stand on it's own.
-
-Good luck with your program!
-
-Brian
-
-
+Additional types:
+  Waypoint|Reference Point
+  Waypoint|Parking Area
+Additional symbols:
+  Reference Point
+  Parking Area

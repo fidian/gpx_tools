@@ -14,19 +14,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  */
-#include "config.h"
-#include <stdio.h>
-#ifdef HAVE_STDLIB_H
-#include <stdlib.h>
-#else
-#error NO STDLIB_H
-#endif
-#ifdef HAVE_STRING_H
-#include <string.h>
-#else
-#error NO STRING_H
-#endif
-
+#define NEED_STDIO_H
+#define NEED_STDLIB_H
+#define NEED_STRING_H
+#include "include.h"
 #include "ini_settings.h"
 #include "mem_str.h"
 
@@ -62,13 +53,19 @@ void WriteSetting(SettingsStruct **head, const char *key, const char *value)
 {
    SettingsStruct *ss;
    
+   DEBUG("Getting memory for node");
    ss = getMemory(sizeof(SettingsStruct));
+   DEBUG("Making key_org string");
    AppendString(&(ss->key_orig), key);
+   DEBUG("Making key string");
    AppendString(&(ss->key), key);
+   DEBUG("Changing key to lowercase");
    LowercaseString(ss->key);
+   DEBUG("Making value string");
    AppendString(&(ss->value), value);
    ss->next = *head;
    *head = ss;
+   DEBUG("Setting creation complete");
 }
 
 
@@ -77,6 +74,7 @@ void ReadSettings(SettingsStruct **head, const char *filename)
    FILE *fp;
    char *buffer, *key_start, *value_start, *tmp_ptr;
    
+   DEBUG("Opening settings file");
    fp = fopen(filename, "r");
    if (! fp)
      {
@@ -84,20 +82,21 @@ void ReadSettings(SettingsStruct **head, const char *filename)
 	exit(10);
      }
    
+   DEBUG("Allocating memory for buffer");
    buffer = getMemory(SETTING_LINE_LEN);
    while (! feof(fp))
      {
-	fgets(buffer, SETTING_LINE_LEN, fp);
-	//printf("buff: %s", buffer);
+	ReadLine(buffer, SETTING_LINE_LEN, fp);
 
 	// Trim the end of the string
 	tmp_ptr = buffer + strlen(buffer) - 1;
-	while (*tmp_ptr == '\n' || *tmp_ptr == '\r' ||
-	       *tmp_ptr == '\t' || *tmp_ptr == ' ')
+	while (tmp_ptr > buffer &&
+               (*tmp_ptr == '\t' || *tmp_ptr == ' '))
 	  {
 	     *tmp_ptr = '\0';
 	     tmp_ptr --;
 	  }
+	DEBUG(buffer);
 	
 	// Trim the beginning
 	key_start = buffer;
@@ -105,6 +104,7 @@ void ReadSettings(SettingsStruct **head, const char *filename)
 	  {
 	     key_start ++;
 	  }
+	DEBUG("Done with key_start");
 	
 	// Find the value beginning and trim end of the key and
 	// the beginning of the value
@@ -113,8 +113,11 @@ void ReadSettings(SettingsStruct **head, const char *filename)
 	  {
 	     value_start ++;
 	  }
-	if (*value_start != '\0')
+	DEBUG("Done with value_start");
+	
+	if (*value_start != '\0' && value_start > key_start)
 	  {
+	     DEBUG("Removing whitespace between key and value");
 	     *value_start = ' ';
 	     value_start --;
 	     while (*value_start == '\t' || *value_start == ' ')
@@ -127,18 +130,22 @@ void ReadSettings(SettingsStruct **head, const char *filename)
 		  *value_start = '\0';
 		  value_start ++;
 	       }
-	     //printf("key: %s\n", key_start);
+	     DEBUG("Done removing whitespace");
 	     
 	     // If we have something, save it.
 	     if (*value_start != '\0')
 	       {
-		  //printf("[%s] = [%s]\n", key_start, value_start);
+		  DEBUG("Writing setting");
+		  DEBUG(key_start);
+		  DEBUG(value_start);
 		  WriteSetting(head, key_start, value_start);
 	       }
 	  }
      }
 
+   DEBUG("Freeing memory");
    freeMemory((void **) &buffer);
+   DEBUG("Closing file pointer");
    fclose(fp);
 }
 
@@ -155,4 +162,33 @@ void FreeSettings(SettingsStruct **head)
 	freeMemory((void **) &(cur->value));
 	freeMemory((void **) &cur);
      }
+}
+
+
+// Reads a single line.  It acts much like fgets, but will stop
+// properly on either LF or CR.
+void ReadLine(char *buffer, unsigned int len, FILE *fp)
+{
+   unsigned int i = 0;
+   int letter;
+   
+   DEBUG("Reading one line");
+   len --;
+   while (i < len) 
+     {
+	letter = fgetc(fp);
+	if (letter == EOF || letter == '\r' || letter == '\n') 
+	  {
+	     DEBUG("Hit EOF, newline, or carriage return");
+	     buffer[i] = '\0';
+	     DEBUG(buffer);
+	     return;
+	  }
+	buffer[i] = letter;
+	i ++;
+     }
+   DEBUG("Filled buffer");
+   buffer[i] = '\0';
+   DEBUG(buffer);
+   return;
 }

@@ -14,19 +14,11 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  */
-#include "../config.h"
-#include <ctype.h>
-#include <stdio.h>
-#ifdef HAVE_STDLIB_H
-#include <stdlib.h>
-#else
-#error NO STDLIB_H
-#endif
-#ifdef HAVE_STRING_H
-#include <string.h>
-#else
-#error NO STRING_H
-#endif
+#define NEED_CTYPE_H
+#define NEED_STDIO_H
+#define NEED_STDLIB_H
+#define NEED_STRING_H
+#include "include.h"
 
 #define STRING_CHUNK_SIZE 256
 
@@ -77,9 +69,10 @@ void AppendStringN(char **dest, const char *src, const int slen)
    char *newdest;
    int dlen, newlen;
    int old_blocks, new_blocks;
-   
+  
    if (src == NULL || slen < 1)
      {
+	DEBUG("src is null or slen < 1");
 	return;
      }
    
@@ -157,6 +150,11 @@ int StringReplace(char **where, const char *from, const char *to)
 {
    char *out = NULL, *start;
    int i, fl, replaced;
+
+   if (*where == NULL)
+     {
+        return 0;
+     }
    
    fl = strlen(from);
    start = *where;
