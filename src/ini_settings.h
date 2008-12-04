@@ -17,8 +17,8 @@
 
 typedef struct settings
 {
-   char *key, *key_orig, *value;
-   struct settings *next;
+	char *key, *key_orig, *value;
+	struct settings *next;
 } SettingsStruct;
 
 
