@@ -565,10 +565,12 @@ void WriteFormattedTags(Waypoint_Info *wpi, AppData *ad)
 	{
 		SwapWaypointString(wpi, wpi->gcname_off, wpi->gcname_len, output);
 	}
-	else if (wpi->desc_off)
+
+	if (wpi->desc_off)
 	{
 		SwapWaypointString(wpi, wpi->desc_off, wpi->desc_len, output);
 	}
+
 	freeMemory((void **) &output);
 
 	output = BuildSymTag(wpi, ad);
