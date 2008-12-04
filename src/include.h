@@ -39,5 +39,11 @@
 #endif
 
 #define __FILE2__ ((strrchr(__FILE__, '/')?:__FILE__ - 1)+1)
-#define DEBUG(x)
+
+// If you need to enable debugging, uncomment the
+// following line by removing the two slashes at the beginning
 //#define DEBUG(x) fprintf(stderr, "[%s %d] %s\n", __FILE2__, __LINE__, x); fflush(stderr)
+
+#ifndef DEBUG
+# define DEBUG(x)
+#endif
