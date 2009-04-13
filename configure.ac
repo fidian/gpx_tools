@@ -1,4 +1,4 @@
-AC_INIT([gpx-tools], [1.0], [fidian@rumkin.com])
+AC_INIT([gpx-tools], [1.1], [fidian@rumkin.com])
 
 dnl Detect the canonical host and target build environment
 AC_CANONICAL_HOST
