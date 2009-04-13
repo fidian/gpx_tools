@@ -77,6 +77,8 @@ char *AssembleFormat(Waypoint_Info *wpi, AppData *ad,
 	// %C = code as specified with "CACHETYPE_Prefix"
 	// %Y = Cache type, spelled out
 	// %I = ID (the xxxx part of GCxxxx)
+	// %i = ID (Like %i but always removes first 2 chars)
+	// %p = First 2 chars (what's removed by %i)
 	// %D = Difficulty as 1 or 3 character string
 	// %d = Difficulty as a single digit, 1-9
 	// %T = Terrain as 1 or 3 character string
@@ -235,6 +237,17 @@ char *AssembleFormat(Waypoint_Info *wpi, AppData *ad,
 					}
 					break;
 
+				case 'i': // Like %I except always removes 2 chars
+					DEBUG("AssembleFormat i");
+					AppendStringN(&tmp, &(wpi->WaypointXML[wpi->name_off]),
+							wpi->name_len);
+					if (wpi->name_len > 2)
+					{
+						tmp[0] = ' ';
+						tmp[1] = ' ';
+					}
+					break;
+
 				case 'L': // First letter of the logs
 					DEBUG("AssembleFormat L");
 					AppendString(&tmp, wpi->logSummary);
@@ -272,6 +285,16 @@ char *AssembleFormat(Waypoint_Info *wpi, AppData *ad,
 					HTMLUnescapeString(&tmp2);
 					AppendString(&tmp, tmp2);
 					freeMemory((void **) &tmp2);
+					break;
+
+				case 'p': // Prefix; first 2 characters
+					DEBUG("AssembleFormat p");
+					AppendStringN(&tmp, &(wpi->WaypointXML[wpi->name_off]),
+							wpi->name_len);
+					if (wpi->name_len >= 2)
+					{
+						tmp[3] = ' ';
+					}
 					break;
 
 				case 'S': // Size, full string
