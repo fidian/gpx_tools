@@ -1,12 +1,6 @@
 waypoint:  Parse waypoint date
 gpxfilter:  Filter by date
 
-Reference points can start with TR, DB, or possibly others.  The %I format only
-removes the first two characters if they are "GC".  Make %i that will always
-remove the first two characters, and make new format codes for just the first
-two characters and just the first two if they are not GC.  It would be nice
-to have "GC1234" and "TB1234" show up as "1234" and "1234-TB" if possible
-
 Handle the following types and symbols (and others too):
 
 Additional types:
