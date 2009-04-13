@@ -697,7 +697,7 @@ int main(int argc, char **argv)
 	DEBUG("Parsing XML");
 	ParseXML(fpin, &WaypointHandler, &NonWaypointHandler, (void *) ad);
 	DEBUG("Writing trailing newline");
-	fprintf(ad->fpout, GetXMLNewline());
+	fputs(GetXMLNewline(), ad->fpout);
 
 	if (fpin != stdin)
 	{
