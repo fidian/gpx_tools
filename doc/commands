@@ -12,3 +12,6 @@ Prepare a package for distribution:
 Build Win32 binaries:
     CC=i686-mingw32-gcc CFLAGS=-static \
     ./configure --host=i686-pc-linux-gnu --target=i686-pc-mingw32
+
+Make a tarball
+    tar cvfz gpx_tools-X.Y.tar.gz --exclude gpx_tools/.git\* gpx_tools
