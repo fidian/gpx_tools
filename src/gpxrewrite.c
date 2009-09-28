@@ -41,6 +41,11 @@ char *GetFormattedCacheType(Waypoint_Info *wpi)
 
 	if (formattedType == NULL) 
 	{
+		AppendStringN(&formattedType, &(wpi->WaypointXML[wpi->type_off]),
+			wpi->type_len);
+	}
+
+	if (formattedType == NULL) {
 		AppendString(&formattedType, "No_Type");
 		return formattedType;
 	}
@@ -49,6 +54,9 @@ char *GetFormattedCacheType(Waypoint_Info *wpi)
 	while (formattedType[i] != ' ' && formattedType[i] != '-' &&
 			formattedType[i] != '\0')
 	{
+		if (formattedType[i] == '|') {
+			formattedType[i] = '_';
+		}
 		i ++;
 	}
 	formattedType[i] = '\0';
@@ -512,9 +520,18 @@ char *BuildSymTag(Waypoint_Info *wpi, AppData *ad)
 	{
 		AppendString(&foundStatus, "Found");
 	}
-	else
+	else if (wpi->sym_len == 8 &&
+			strncmp(&(wpi->WaypointXML[wpi->sym_off]), "Geocache", 
+				wpi->sym_len) == 0)
 	{
 		AppendString(&foundStatus, "Not_Found");
+	}
+	else if (strncmp(formattedType, "Waypoint_", 9) == 0)
+	{
+		value = GetSetting(ad->settings, formattedType);
+		freeMemory((void **) &keyName);
+		freeMemory((void **) &formattedType);
+		return value;
 	}
 
 	// TYPE_SIZE_FOUND
