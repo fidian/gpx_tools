@@ -70,9 +70,9 @@ void AppendStringN(char **dest, const char *src, const int slen)
 	int dlen, newlen;
 	int old_blocks, new_blocks;
 
-	if (src == NULL || slen < 1)
+	if (src == NULL)
 	{
-		DEBUG("src is null or slen < 1");
+		DEBUG("src is null");
 		return;
 	}
 
