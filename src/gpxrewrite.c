@@ -374,7 +374,7 @@ char *AssembleFormat(Waypoint_Info *wpi, AppData *ad,
 			// Remove beginning whitespace and strip invalid characters
 			i = 0;
 			j = 0;
-			DEBUG("B");
+			DEBUG("Strip beginning whitespace and bad characters");
 			if (tmp)
 			{
 				if (strip_ws) 
@@ -442,6 +442,7 @@ char *AssembleFormat(Waypoint_Info *wpi, AppData *ad,
 				// length == -1
 				if (length == -1 && *current >= '0' && *current <= '9')
 				{
+					DEBUG("Finding length");
 					// Find and parse a number after the format code
 					length = 0;
 					while (*current >= '0' && *current <= '9')
@@ -477,12 +478,18 @@ char *AssembleFormat(Waypoint_Info *wpi, AppData *ad,
 			lastEnd = current;
 		}
 	}
-	DEBUG("C");
+	DEBUG("Copy remaining characters");
 
 	// Copy any remaining characters
 	if (lastEnd != current)
 	{
 		AppendStringN(&out, lastEnd, current - lastEnd);
+	}
+
+	if (! out) {
+		// Make an empty string to return in case there was nothing
+		c = 0x00;
+		AppendString(&out, "");
 	}
 
 	// Reformat the auto-size fields
