@@ -38,14 +38,16 @@ char *GetFormattedCacheType(Waypoint_Info *wpi)
 
 	AppendStringN(&formattedType, &(wpi->WaypointXML[wpi->type2_off]),
 			wpi->type2_len);
+    DEBUG(formattedType);
 
-	if (formattedType == NULL) 
+	if (formattedType == NULL || strlen(formattedType) == 0) 
 	{
 		AppendStringN(&formattedType, &(wpi->WaypointXML[wpi->type_off]),
 			wpi->type_len);
+        DEBUG(formattedType);
 	}
 
-	if (formattedType == NULL) {
+	if (formattedType == NULL || strlen(formattedType) == 0) {
 		AppendString(&formattedType, "No_Type");
 		return formattedType;
 	}
@@ -483,18 +485,21 @@ char *AssembleFormat(Waypoint_Info *wpi, AppData *ad,
 	// Copy any remaining characters
 	if (lastEnd != current)
 	{
+		DEBUG("Copy remaining characters - Append");
 		AppendStringN(&out, lastEnd, current - lastEnd);
 	}
 
 	if (! out) {
 		// Make an empty string to return in case there was nothing
 		c = 0x00;
+		DEBUG("Copy remaining characters - Empty");
 		AppendString(&out, "");
 	}
 
 	// Reformat the auto-size fields
 	if (max_length > 0)
 	{
+		DEBUG("Copy remaining characters - Resize");
 		AutoSizeString(out, max_length);
 
 		if (strlen(out) > max_length) 
@@ -512,32 +517,38 @@ char *AssembleFormat(Waypoint_Info *wpi, AppData *ad,
 char *BuildSymTag(Waypoint_Info *wpi, AppData *ad)
 {
 	char *formattedType = NULL;
-	char *keyName = NULL, *value = NULL, *foundStatus = NULL;
+	char *keyName = NULL, *value = NULL, *foundStatus = NULL, *symbol = NULL;
+
+	DEBUG("BuildSymTag");
 
 	if (wpi->sym_len == 0)
 	{
+		DEBUG("Empty symbol length");
 		return (char *) NULL;
 	}
 
 	formattedType = GetFormattedCacheType(wpi);
+	AppendStringN(&symbol, &(wpi->WaypointXML[wpi->sym_off]), wpi->sym_len);
+	DEBUG(symbol);
+    DEBUG(formattedType);
 
-	if (wpi->sym_len == 14 &&
-			strncmp(&(wpi->WaypointXML[wpi->sym_off]), "Geocache Found",
-				wpi->sym_len) == 0)
+	if (strcmp("Geocache Found", symbol) == 0)
 	{
+		DEBUG("Geocache Found");
 		AppendString(&foundStatus, "Found");
 	}
-	else if (wpi->sym_len == 8 &&
-			strncmp(&(wpi->WaypointXML[wpi->sym_off]), "Geocache", 
-				wpi->sym_len) == 0)
+	else if (strcmp("Geocache", symbol) == 0)
 	{
+		DEBUG("Geocache (not found)");
 		AppendString(&foundStatus, "Not_Found");
 	}
 	else if (strncmp(formattedType, "Waypoint_", 9) == 0)
 	{
+		DEBUG("Waypoint");
 		value = GetSetting(ad->settings, formattedType);
 		freeMemory((void **) &keyName);
 		freeMemory((void **) &formattedType);
+		freeMemory((void **) &symbol);
 		return value;
 	}
 
@@ -548,12 +559,14 @@ char *BuildSymTag(Waypoint_Info *wpi, AppData *ad)
 			wpi->container_len);
 	AppendString(&keyName, "_");
 	AppendString(&keyName, foundStatus);
+	DEBUG("Finding with TYPE_SIZE_FOUND");
 	value = GetSetting(ad->settings, keyName);
 	freeMemory((void **) &keyName);
 
 	// TYPE_FOUND
 	if (value == NULL) 
 	{
+		DEBUG("Finding with TYPE_FOUND");
 		AppendString(&keyName, formattedType);
 		AppendString(&keyName, "_");
 		AppendString(&keyName, foundStatus);
@@ -562,8 +575,10 @@ char *BuildSymTag(Waypoint_Info *wpi, AppData *ad)
 	}
 
 	// FOUND
+	// Can only work if the <sym> element exists.
 	if (value == NULL) 
 	{
+		DEBUG("Finding with FOUND");
 		AppendString(&keyName, foundStatus);
 		value = GetSetting(ad->settings, keyName);
 		freeMemory((void **) &keyName);
@@ -571,6 +586,7 @@ char *BuildSymTag(Waypoint_Info *wpi, AppData *ad)
 
 	freeMemory((void **) &formattedType);
 	freeMemory((void **) &foundStatus);
+	freeMemory((void **) &symbol);
 
 	return value;
 }

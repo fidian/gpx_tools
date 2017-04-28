@@ -29,13 +29,17 @@ char *GetSetting(SettingsStruct *node, char *keyname)
 {
 	char *keyname_lower = NULL;
 
+	DEBUG("Creating key");
 	AppendString(&keyname_lower, keyname);
+	DEBUG("Changing to lowercase");
 	LowercaseString(keyname_lower);
+	DEBUG("Scanning across setting nodes");
 
 	while (node != NULL)
 	{
 		if (strcmp(node->key, keyname_lower) == 0)
 		{
+			DEBUG("Match");
 			freeMemory((void **) &keyname_lower);
 			return node->value;
 		}
@@ -43,6 +47,7 @@ char *GetSetting(SettingsStruct *node, char *keyname)
 		node = node->next;
 	}
 
+	DEBUG("Fail to find");
 	freeMemory((void **) &keyname_lower);
 
 	return (char *) NULL;
